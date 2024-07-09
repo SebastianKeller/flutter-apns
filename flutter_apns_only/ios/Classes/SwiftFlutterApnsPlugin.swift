@@ -185,16 +185,7 @@ func getFlutterError(_ error: Error) -> FlutterError {
     
     
     public func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) -> Bool {
-        let userInfo = FlutterApnsSerialization.remoteMessageUserInfo(toDict: userInfo)
-        
-        if resumingFromBackground {
-            onResume(userInfo: userInfo)
-        } else {
-            channel.invokeMethod("onMessage", arguments: userInfo)
-        }
-        
-        completionHandler(.noData)
-        return true
+        return false
     }
     
     public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
