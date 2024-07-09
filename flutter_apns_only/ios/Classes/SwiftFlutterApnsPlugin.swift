@@ -19,9 +19,7 @@ func getFlutterError(_ error: Error) -> FlutterError {
     }
     
     let channel: FlutterMethodChannel
-    var launchNotification: [String: Any]?
-    var resumingFromBackground = false
-    
+
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
         case "requestNotificationPermissions":
@@ -32,13 +30,6 @@ func getFlutterError(_ error: Error) -> FlutterError {
                 "UNUserNotificationCenter.current().delegate is not set. Check readme at https://pub.dev/packages/flutter_apns."
             )
             UIApplication.shared.registerForRemoteNotifications()
-
-            // check for onLaunch notification *after* configure has been ran
-            if let launchNotification = launchNotification {
-                channel.invokeMethod("onLaunch", arguments: launchNotification)
-                self.launchNotification = nil
-                return
-            }
             result(nil)
         case "getAuthorizationStatus":
             getAuthorizationStatus(result)
@@ -135,7 +126,6 @@ func getFlutterError(_ error: Error) -> FlutterError {
             }
         }
 
-        
         let optionsUnion = UNAuthorizationOptions(options)
         
         center.requestAuthorization(options: optionsUnion) { (granted, error) in
@@ -160,75 +150,10 @@ func getFlutterError(_ error: Error) -> FlutterError {
         
         application.registerForRemoteNotifications()
     }
-    
+
     //MARK:  - AppDelegate
-    
-    public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [AnyHashable : Any] = [:]) -> Bool {
-        if let launchNotification = launchOptions[UIApplication.LaunchOptionsKey.remoteNotification] as? [String: Any] {
-            self.launchNotification = FlutterApnsSerialization.remoteMessageUserInfo(toDict: launchNotification)
-        }
-        return true
-    }
-    
-    public func applicationDidEnterBackground(_ application: UIApplication) {
-        resumingFromBackground = true
-    }
-    
-    public func applicationDidBecomeActive(_ application: UIApplication) {
-        resumingFromBackground = false
-        UIApplication.shared.applicationIconBadgeNumber = -1;
-    }
-    
     public func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         channel.invokeMethod("onToken", arguments: deviceToken.hexString)
-    }
-    
-    
-    public func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) -> Bool {
-        return false
-    }
-    
-    public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        let userInfo = notification.request.content.userInfo
-        
-        guard userInfo["aps"] != nil else {
-            return
-        }
-        
-        let dict = FlutterApnsSerialization.remoteMessageUserInfo(toDict: userInfo)
-        
-        channel.invokeMethod("willPresent", arguments: dict) { (result) in
-            let shouldShow = (result as? Bool) ?? false
-            if shouldShow {
-                completionHandler([.alert, .sound])
-            } else {
-                completionHandler([])
-                let userInfo = FlutterApnsSerialization.remoteMessageUserInfo(toDict: userInfo)
-                self.channel.invokeMethod("onMessage", arguments: userInfo)
-            }
-        }
-    }
-    
-    public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-        var userInfo = response.notification.request.content.userInfo
-        guard userInfo["aps"] != nil else {
-            return
-        }
-        
-        userInfo["actionIdentifier"] = response.actionIdentifier
-        let dict = FlutterApnsSerialization.remoteMessageUserInfo(toDict: userInfo)
-        
-        if launchNotification != nil {
-            launchNotification = dict
-            return
-        }
-
-        onResume(userInfo: dict)
-        completionHandler()
-    }
-    
-    func onResume(userInfo: [AnyHashable: Any]) {
-        channel.invokeMethod("onResume", arguments: userInfo)
     }
 }
 

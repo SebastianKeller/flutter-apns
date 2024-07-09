@@ -4,17 +4,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' hide MessageHandler;
 
-class ApnsRemoteMessage {
-  ApnsRemoteMessage.fromMap(this.payload);
-
-  final Map<String, dynamic> payload;
-
-  String? get actionIdentifier => UNNotificationAction.getIdentifier(payload);
-}
-
-typedef ApnsMessageHandler = Future<void> Function(ApnsRemoteMessage);
-typedef WillPresentHandler = Future<bool> Function(ApnsRemoteMessage);
-
 enum ApnsAuthorizationStatus {
   authorized,
   denied,
@@ -24,18 +13,12 @@ enum ApnsAuthorizationStatus {
 
 class ApnsPushConnectorOnly {
   final MethodChannel _channel = () {
-    assert(Platform.isIOS,
-        'ApnsPushConnectorOnly can only be created on iOS platform!');
+    assert(Platform.isIOS, 'ApnsPushConnectorOnly can only be created on iOS platform!');
     return const MethodChannel('flutter_apns');
   }();
-  ApnsMessageHandler? _onMessage;
-  ApnsMessageHandler? _onLaunch;
-  ApnsMessageHandler? _onResume;
-
   Future<bool> requestNotificationPermissions(
       [IosNotificationSettings iosSettings = const IosNotificationSettings()]) async {
-    final bool? result = await _channel.invokeMethod<bool>(
-        'requestNotificationPermissions', iosSettings.toMap());
+    final bool? result = await _channel.invokeMethod<bool>('requestNotificationPermissions', iosSettings.toMap());
     return result ?? false;
   }
 
@@ -51,15 +34,7 @@ class ApnsPushConnectorOnly {
   }
 
   /// Sets up [MessageHandler] for incoming messages.
-  void configureApns({
-    ApnsMessageHandler? onMessage,
-    ApnsMessageHandler? onLaunch,
-    ApnsMessageHandler? onResume,
-    ApnsMessageHandler? onBackgroundMessage,
-  }) {
-    _onMessage = onMessage;
-    _onLaunch = onLaunch;
-    _onResume = onResume;
+  void configureApns() {
     _channel.setMethodCallHandler(_handleMethod);
     _channel.invokeMethod('configure');
   }
@@ -70,32 +45,13 @@ class ApnsPushConnectorOnly {
         token.value = call.arguments;
         return null;
       case 'onIosSettingsRegistered':
-        final obj = IosNotificationSettings._fromMap(
-            call.arguments.cast<String, bool>());
+        final obj = IosNotificationSettings._fromMap(call.arguments.cast<String, bool>());
 
         isDisabledByUser.value = obj.alert == false;
         return null;
-      case 'onMessage':
-        return _onMessage?.call(_extractMessage(call));
-      case 'onLaunch':
-        return _onLaunch?.call(_extractMessage(call));
-      case 'onResume':
-        return _onResume?.call(_extractMessage(call));
-      case 'willPresent':
-        return shouldPresent?.call(_extractMessage(call)) ??
-            Future.value(false);
-
       default:
         throw UnsupportedError('Unrecognized JSON message');
     }
-  }
-
-  ApnsRemoteMessage _extractMessage(MethodCall call) {
-    final map = call.arguments as Map;
-    // fix null safety errors
-    map.putIfAbsent('contentAvailable', () => false);
-    map.putIfAbsent('mutableContent', () => false);
-    return ApnsRemoteMessage.fromMap(map.cast());
   }
 
   ApnsAuthorizationStatus _authorizationStatusForString(String? value) {
@@ -112,10 +68,6 @@ class ApnsPushConnectorOnly {
     }
   }
 
-  /// Handler that returns true/false to decide if push alert should be displayed when in foreground.
-  /// Returning true will delay onMessage callback until user actually clicks on it
-  WillPresentHandler? shouldPresent;
-
   final isDisabledByUser = ValueNotifier<bool?>(null);
 
   final token = ValueNotifier<String?>(null);
@@ -127,8 +79,7 @@ class ApnsPushConnectorOnly {
   }
 
   /// https://developer.apple.com/documentation/usernotifications/declaring_your_actionable_notification_types
-  Future<void> setNotificationCategories(
-      List<UNNotificationCategory> categories) {
+  Future<void> setNotificationCategories(List<UNNotificationCategory> categories) {
     return _channel.invokeMethod(
       'setNotificationCategories',
       categories.map((e) => e.toJson()).toList(),
@@ -195,8 +146,7 @@ class UNNotificationAction {
   final String title;
   final List<UNNotificationActionOptions> options;
 
-  static const defaultIdentifier =
-      'com.apple.UNNotificationDefaultActionIdentifier';
+  static const defaultIdentifier = 'com.apple.UNNotificationDefaultActionIdentifier';
 
   /// Returns action identifier associated with this push.
   /// May be null, UNNotificationAction.defaultIdentifier, or value declared in setNotificationCategories
